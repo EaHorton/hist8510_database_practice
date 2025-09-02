@@ -32,10 +32,32 @@ for idx, row in enumerate(rows, 1):
         row['county'],
         row['state'],
         row['result'],
-        row['reasoning'],
         row['years_married'],
         row['additional_requests']
     ))
+
+# --- Reasoning Table ---
+reasoning_set = set()
+reasoning = []
+reasoning_id_map = {}
+reasoning_id_counter = 1
+for row in rows:
+    terms = [t.strip() for t in row['reasoning'].split(',') if t.strip()]
+    for term in terms:
+        if term and term not in reasoning_set:
+            reasoning_set.add(term)
+            reasoning_id_map[term] = reasoning_id_counter
+            reasoning.append((reasoning_id_counter, term))
+            reasoning_id_counter += 1
+
+# --- Petition_Reasoning_Lookup Table ---
+petition_reasoning_lookup = []
+for idx, row in enumerate(rows, 1):
+    terms = [t.strip() for t in row['reasoning'].split(',') if t.strip()]
+    for term in terms:
+        reasoning_id = reasoning_id_map.get(term)
+        if reasoning_id:
+            petition_reasoning_lookup.append((idx, reasoning_id))
 
 # --- People Table ---
 people_set = set()
@@ -43,10 +65,10 @@ people = []
 person_id_map = {}
 person_id_counter = 1
 for row in rows:
+    enslaver_status = row.get('enslaver_status', '')
+    enslaver_scope = row.get('enslaver_scope_estimate', '')
     for role in ['petitioner', 'defendant']:
         name = row[role]
-        enslaver_status = row.get(f'{role}_enslaver_status', '')
-        enslaver_scope = row.get(f'{role}_enslaver_scope_estimate', '')
         key = (name, enslaver_status, enslaver_scope)
         if name and key not in people_set:
             people_set.add(key)
@@ -59,10 +81,10 @@ lookup = []
 for row in rows:
     parcel = row['parcel_number']
     pid = petition_id_map[parcel]
+    enslaver_status = row.get('enslaver_status', '')
+    enslaver_scope = row.get('enslaver_scope_estimate', '')
     for role in ['petitioner', 'defendant']:
         name = row[role]
-        enslaver_status = row.get(f'{role}_enslaver_status', '')
-        enslaver_scope = row.get(f'{role}_enslaver_scope_estimate', '')
         key = (name, enslaver_status, enslaver_scope)
         if name:
             lookup.append((pid, person_id_map[key]))
@@ -133,9 +155,12 @@ c.execute('''CREATE TABLE Petitions (
     county TEXT,
     state TEXT,
     result TEXT,
-    reasoning TEXT,
     years_married TEXT,
     additional_requests TEXT
+)''')
+c.execute('''CREATE TABLE Petition_Reasoning_Lookup (
+    petition_id INTEGER,
+    reasoning_id INTEGER
 )''')
 c.execute('''CREATE TABLE People (
     person_id INTEGER PRIMARY KEY,
@@ -165,7 +190,8 @@ c.execute('''CREATE TABLE Additional_Requests (
     additional_requests TEXT
 )''')
 
-c.executemany('INSERT INTO Petitions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', petitions)
+c.executemany('INSERT INTO Petitions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', petitions)
+c.executemany('INSERT INTO Petition_Reasoning_Lookup VALUES (?, ?)', petition_reasoning_lookup)
 c.executemany('INSERT INTO People VALUES (?, ?, ?, ?)', people)
 c.executemany('INSERT INTO Petition_People_Lookup VALUES (?, ?)', lookup)
 c.executemany('INSERT INTO Reasoning VALUES (?, ?)', reasoning)
